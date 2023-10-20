@@ -85,6 +85,10 @@ func generateHostKeys(hostname string) (keys []string) {
 }
 
 func DecryptCookie(encryptedValue []byte, key []byte, initVector []byte) (string, error) {
+	if len(encryptedValue) == 0 {
+		return "", nil
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err

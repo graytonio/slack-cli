@@ -1,0 +1,112 @@
+package config
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"os"
+	"path"
+
+	"github.com/graytonio/slack-cli/lib/cookieextracter"
+	"github.com/slack-go/slack"
+	"github.com/spf13/viper"
+)
+
+var home, _ = os.UserHomeDir()
+
+type Config struct {
+	Workspace string `mapstructure:"workspace"`
+	SlackCredentials *cookieextracter.SlackCredentials `mapstructure:"credentials"`
+	SavedChannels map[string]string `mapstructure:"channel_cache"`
+	SavedUsers map[string]string `mapstructure:"users_cache"`
+}
+
+var config = Config{
+	SlackCredentials: &cookieextracter.SlackCredentials{},
+	SavedChannels: make(map[string]string),
+	SavedUsers: make(map[string]string),
+}
+
+var SlackClient *slack.Client
+
+func init() {
+	log.SetOutput(io.Discard)
+	viper.SetDefault("workspace", "")
+
+
+	viper.SetConfigFile(path.Join(home, ".config/slackcli.yaml"))
+	viper.SafeWriteConfigAs(path.Join(home, ".config/slackcli.yaml"))
+	if err := viper.ReadInConfig(); err != nil {
+		panic(err)
+	}
+
+	if err := viper.Unmarshal(&config); err != nil {
+		panic(err)
+	}
+
+	if config.SlackCredentials.Cookie == "" || config.SlackCredentials.UserToken == "" {
+		if config.Workspace == "" {
+			fmt.Println("workspace not configured please set in config file ~/.config/slackcli.yaml")
+			os.Exit(1)
+		}
+
+		fmt.Printf("Fetching credentials for %s make sure slack app is quit\n", config.Workspace)
+		loadCredentials()
+	}
+
+	initSlackClient()
+}
+
+func AddUserCache(name string, id string) {
+	config.SavedUsers[name] = id
+	viper.Set("users_cache", config.SavedUsers)
+	viper.WriteConfig()
+}
+
+func AddChannelCache(name string, id string) {
+	config.SavedChannels[name] = id
+	viper.Set("channel_cache", config.SavedChannels)
+	viper.WriteConfig()
+}
+
+func loadCredentials() {
+	creds, err := cookieextracter.GetSlackCredentials(config.Workspace)
+	if err != nil {
+		panic(err)
+	}
+
+	viper.SetConfigFile(path.Join(home, ".config/slackcli.yaml"))
+	viper.SafeWriteConfigAs(path.Join(home, ".config/slackcli.yaml"))
+	viper.Set("credentials.cookie", creds.Cookie)
+	viper.Set("credentials.token", creds.UserToken)
+	viper.WriteConfig()
+	viper.Unmarshal(&config)
+}
+
+func initSlackClient() {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	cookieURL, _ := url.Parse("https://slack.com")
+	jar.SetCookies(cookieURL, []*http.Cookie{
+		{
+			Name: "d",
+			Value: GetConfig().SlackCredentials.Cookie,
+		},
+	})
+
+	httpClient := &http.Client{
+		Jar: jar,
+	}
+
+	SlackClient = slack.New(GetConfig().SlackCredentials.UserToken, slack.OptionHTTPClient(httpClient))
+}
+
+func GetConfig() *Config {
+	return &config
+}

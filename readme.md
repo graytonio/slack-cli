@@ -14,7 +14,7 @@ The cli can be installed by downloading the appropriate binary from the releases
 
 ### Go Install
 ```bash
-go install github.com/graytonio/slack-cli
+go install github.com/graytonio/slack-cli@latest
 ```
 
 **NOTE:** Brew install will be availabel in the future

@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
 	"github.com/graytonio/slack-cli/lib/config"
+	"github.com/graytonio/slack-cli/lib/slackutils"
 	"github.com/slack-go/slack"
 	"github.com/spf13/cobra"
 )
@@ -16,17 +16,26 @@ func init() {
 
 func parseToArg(arg string) (string, error) {
 	if strings.HasPrefix(arg, "@") {
-		user, ok := config.GetConfig().SavedUsers[strings.TrimPrefix(arg, "@")]
-		if !ok {
-			return "", fmt.Errorf("user %s not found in cache", arg)
+		user := strings.TrimPrefix(arg, "@")
+		uID, ok := config.GetConfig().SavedUsers[user]
+		if ok {
+			return uID, nil
 		}
-		return user, nil
+
+		u, err := slackutils.GetUserByName(user)
+		if err != nil {
+			return "", err
+		}
+
+		return u.ID, nil
 	} else if strings.HasPrefix(arg, "#") {
-		channel, ok := config.GetConfig().SavedChannels[strings.TrimPrefix(arg, "#")]
-		if !ok {
-			return "", fmt.Errorf("user %s not found in cache", arg)
+		channel := strings.TrimPrefix(arg, "#")
+		c, err := slackutils.GetChannelByName(channel)
+		if err != nil {
+			return "", err
 		}
-		return channel, nil
+
+		return c.ID, nil
 	} else {
 		return arg, nil
 	}

@@ -11,31 +11,39 @@ import (
 	"path"
 
 	"github.com/graytonio/slack-cli/lib/cookieextracter"
+	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/spf13/viper"
 )
 
 var home, _ = os.UserHomeDir()
 
+type SmartSection struct {
+	SectionName string `mapstructure:"section"`
+	ReExpression string `mapstructure:"re"`
+}
+
 type Config struct {
 	Workspace string `mapstructure:"workspace"`
 	SlackCredentials *cookieextracter.SlackCredentials `mapstructure:"credentials"`
 	SavedChannels map[string]string `mapstructure:"channel_cache"`
 	SavedUsers map[string]string `mapstructure:"users_cache"`
+	SmartSections []SmartSection `mapstructure:"smart_sections"`
 }
 
 var config = Config{
 	SlackCredentials: &cookieextracter.SlackCredentials{},
 	SavedChannels: make(map[string]string),
 	SavedUsers: make(map[string]string),
+	SmartSections: []SmartSection{},
 }
 
 var SlackClient *slack.Client
+var SlackHTTPClient *http.Client
 
 func init() {
 	log.SetOutput(io.Discard)
 	viper.SetDefault("workspace", "")
-
 
 	viper.SetConfigFile(path.Join(home, ".config/slackcli.yaml"))
 	viper.SafeWriteConfigAs(path.Join(home, ".config/slackcli.yaml"))
@@ -58,6 +66,12 @@ func init() {
 	}
 
 	initSlackClient()
+}
+
+func SetLogLevel() {
+	if viper.GetBool("verbose") {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 }
 
 func AddUserCache(name string, id string) {
@@ -100,11 +114,11 @@ func initSlackClient() {
 		},
 	})
 
-	httpClient := &http.Client{
+	SlackHTTPClient = &http.Client{
 		Jar: jar,
 	}
 
-	SlackClient = slack.New(GetConfig().SlackCredentials.UserToken, slack.OptionHTTPClient(httpClient))
+	SlackClient = slack.New(GetConfig().SlackCredentials.UserToken, slack.OptionHTTPClient(SlackHTTPClient))
 }
 
 func GetConfig() *Config {

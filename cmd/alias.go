@@ -8,11 +8,11 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(saveCmd)
+	rootCmd.AddCommand(aliasCmd)
 }
 
-var saveCmd = &cobra.Command{
-	Use: "save <user|channel> name id",
+var aliasCmd = &cobra.Command{
+	Use: "alias <user|channel> name id",
 	Short: "Save a channel or user to reference by name",
 	Args: cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {

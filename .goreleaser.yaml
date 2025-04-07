@@ -32,11 +32,3 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
-
-brews:
-  - name: slack-cli
-    directory: Formula
-    repository:
-      owner: graytonio
-      name: brews
-      branch: main

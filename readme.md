@@ -17,8 +17,6 @@ The cli can be installed by downloading the appropriate binary from the releases
 go install github.com/graytonio/slack-cli@latest
 ```
 
-**NOTE:** Brew install will be availabel in the future
-
 ## Configuration
 
 On first run the cli will create a configuration file at `~/.config/slackcli.yaml` with a blank configuration file. It will then output an error that the credentials are not configured. Open the configuration file and fill in the workspace key with the name of the workspace you want the cli to connect to.
@@ -29,7 +27,7 @@ For example if your slack workspace is `my-workspace.slack.com` then you would f
 workspace: "my-workspace"
 ```
 
-*NOTE* Before running the cli again make sure to fully quit the slack desktop application before running the cli again. The credentials are extracted from the local storage of the slack app and stored in the configuration file for future use. Once this has happened the app can be open without interfering with the functionality of the cli.
+*NOTE* Before running the cli again make sure to fully quit the slack desktop application. The credentials are extracted from the local storage of the slack app which is locked if it is running and stores it in the configuration file for future use. Once this has happened the app can be open without interfering with the functionality of the cli.
 
 ## Usage
 

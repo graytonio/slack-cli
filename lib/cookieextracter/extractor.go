@@ -146,6 +146,23 @@ type CookieData struct {
 	EncryptedValue string
 }
 
+func getDBVersion(db *sql.DB) (int, error) {
+	sql := "select value from meta where key = 'version';"
+	rows, err := db.Query(sql)
+	if err != nil {
+	  return -1, err
+	}
+
+	db_version := 0
+	for rows.Next() {
+		if err := rows.Scan(&db_version); err != nil {
+			return -1, err
+		}
+	}
+
+	return db_version, nil
+}
+
 func GetSlackCookies(config *BrowserCookieConfig) ([]CookieData, error) {
 	df := pbkdf2.Key([]byte(config.Password), salt, config.Iterations, keyLen, sha1.New)
 
@@ -155,6 +172,11 @@ func GetSlackCookies(config *BrowserCookieConfig) ([]CookieData, error) {
 		return nil, err
 	}
 	defer db.Close()
+
+	db_version, err := getDBVersion(db)
+	if err != nil {
+	  return nil, err
+	}
 
 	data := []CookieData{}
 	sql := "select host_key, path, name, encrypted_value from cookies where host_key like ?"
@@ -181,6 +203,14 @@ func GetSlackCookies(config *BrowserCookieConfig) ([]CookieData, error) {
 				return nil, err
 			}
 			logrus.WithField("cookie", value).Debug("successfully decrypted cookie")
+
+			// Cookies in database version 24 and later include a SHA256
+        	// hash of the domain to the start of the encrypted value.
+        	// https://github.com/chromium/chromium/blob/280265158d778772c48206ffaea788c1030b9aaa/net/extras/sqlite/sqlite_persistent_cookie_store.cc#L223-L224
+			if db_version >= 24 {
+				value = value[32:]
+			}
+
 			c.Value = value
 			data = append(data, c)
 		}

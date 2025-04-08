@@ -1,6 +1,7 @@
 package slackutils
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 
@@ -53,33 +54,46 @@ func GetSectionOfChannelName(channel string) (*ChannelSection, error) {
 
 // Lookup channel object by name
 func GetChannelByName(name string) (channel *slack.Channel, err error) {
-	var (
-		list []slack.Channel
-		cursor string
-	)
-	for {
-		list, cursor, err = config.SlackClient.GetConversationsForUser(&slack.GetConversationsForUserParameters{
-			Types: []string{"public_channel", "private_channel"},
-			ExcludeArchived: true,
-			Limit: 1000,
-			Cursor: cursor,
-		})
-		if err != nil {
-			return nil, err
-		}
-		
-		for _, c := range list {
-			if c.Name == name {
-				return &c, nil
-			}
-		}
+	channels, err := GetAllConversations()
+	if err != nil {
+	  return nil, err
+	}
 
-		if cursor == "" {
-			break
+	for _, c := range channels {
+		if c.Name == name {
+			return &c, nil
 		}
 	}
 
 	return nil, ErrChannelNotFound
+	
+	// var (
+	// 	list []slack.Channel
+	// 	cursor string
+	// )
+	// for {
+	// 	list, cursor, err = config.SlackClient.GetConversationsForUser(&slack.GetConversationsForUserParameters{
+	// 		Types: []string{"public_channel", "private_channel"},
+	// 		ExcludeArchived: true,
+	// 		Limit: 1000,
+	// 		Cursor: cursor,
+	// 	})
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+		
+	// 	for _, c := range list {
+	// 		if c.Name == name {
+	// 			return &c, nil
+	// 		}
+	// 	}
+
+	// 	if cursor == "" {
+	// 		break
+	// 	}
+	// }
+
+	// return nil, ErrChannelNotFound
 }
 
 // FIXME Too slow (cache search users)
@@ -99,28 +113,23 @@ func GetUserByName(name string) (*slack.User, error) {
 	return nil, ErrUserNotFound
 }
 
+type userBootResponseData struct {
+	Channels []slack.Channel `json:"channels"`
+}
+
 func GetAllConversations() (channels []slack.Channel, err error) {
-	var (
-		list []slack.Channel
-		cursor string
-	)
-	for {
-		list, cursor, err = config.SlackClient.GetConversationsForUser(&slack.GetConversationsForUserParameters{
-			ExcludeArchived: true,
-			Limit: 1000,
-			Cursor: cursor,
-			Types: []string{"public_channel", "private_channel"},
-		})
-		if err != nil {
-			return nil, err
-		}
-		channels = append(channels, list...)
-		if cursor == "" {
-			break
-		}
+	body, _, err := RawSlackRequestJSON("POST", "client.userBoot", nil, nil)
+	if err != nil {
+	  return nil, err
+	}	
+
+	data := userBootResponseData{}
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+	  return nil, err
 	}
 
-	return channels, nil
+	return data.Channels, nil
 }
 
 var (

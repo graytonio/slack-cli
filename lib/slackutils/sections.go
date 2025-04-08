@@ -27,7 +27,7 @@ type ChannelSection struct {
 
 // List Channel Sections
 func GetChannelSections() ([]ChannelSection, error) {
-	body, code, err := RawSlackRequest("GET", "users.channelSections.list", nil, nil)
+	body, code, err := RawSlackRequestJSON("GET", "users.channelSections.list", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func CreateSection(name string, emoji string) (string, error) {
 	body, _, err := RawSlackRequestFormData("POST", "users.channelSections.create", map[string]string{
 		"name": name,
 		"emoji": emoji,
-	}, nil)
+	})
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +68,7 @@ type GetSectionResponse struct {
 
 // Get a list of channels in a section
 func GetSectionChannels(sectionID string) ([]string, error) {
-	body, _, err := RawSlackRequest("GET", "users.channelSections.get", nil, map[string]string{
+	body, _, err := RawSlackRequestJSON("GET", "users.channelSections.get", nil, map[string]string{
 		"channel_section_id": sectionID,
 	})
 	if err != nil {
@@ -140,7 +140,7 @@ func MoveChannelToSection(channelName string, toSectionName string) error {
 		payload["remove"] = string(removeEncoded)
 	}	
 
-	body, code, err := RawSlackRequestFormData("POST", "users.channelSections.channels.bulkUpdate", payload, nil)
+	body, code, err := RawSlackRequestFormData("POST", "users.channelSections.channels.bulkUpdate", payload)
 	if err != nil {
 		return err
 	}
@@ -172,11 +172,12 @@ func ExecuteSmartSection(sectionName string, re string) error {
 	channelsToMove := []slack.Channel{}
 	for _, c := range channels {
 		if exp.Match([]byte(c.Name)) {
-			logrus.WithField("channel", c.Name).Debug("found channel to move")
+			logrus.WithField("channel", c.Name).Debug("matched channel")
 			channelsToMove = append(channelsToMove, c)
 		}
 	}
 
+	logrus.Debug("getting destination section details")
 	section, err := GetSectionByName(sectionName)
 	if err != nil {
 		return err
@@ -205,18 +206,26 @@ func BulkChannelMove(channels []slack.Channel, sectionID string) error {
 			return err
 		}
 
+		current_name := "channels"
+		if fromSection != nil {
+			current_name = fromSection.Name
+		}
+
+		logrus.WithField("channel", c.Name).WithField("current_section", current_name).Debug("identified matched channel")
+
 		// Do not move a section that is already in the right section
 		if fromSection != nil && fromSection.ID == sectionID {
+			logrus.WithField("channel", c.Name).Debug("no action needed")
 			continue
 		}
 
 		// Add the channel to the right section
-		logrus.WithField("channel", c.Name).WithField("action", "insert").WithField("section", sectionID).Debug("adding channel to payload")
+		logrus.WithField("channel", c.Name).WithField("action", "insert").WithField("section", sectionID).Debug("adding channel to section")
 		actionData["insert"][sectionID] = append(actionData["insert"][sectionID], c.ID)
 
 		// If channel is in another section remove it from there
 		if fromSection != nil {
-			logrus.WithField("channel", c.Name).WithField("action", "remove").WithField("section", sectionID).Debug("adding channel to payload")
+			logrus.WithField("channel", c.Name).WithField("action", "remove").WithField("section", fromSection.ID).Debug("removing channel from section")
 			actionData["remove"][fromSection.ID] = append(actionData["remove"][fromSection.ID], c.ID)
 		}
 	}
@@ -226,14 +235,18 @@ func BulkChannelMove(channels []slack.Channel, sectionID string) error {
 		"insert": reduceActionMap(actionData["insert"]),
 	}
 
+
+	if payloadData["insert"] == nil {
+		return nil
+	}
+
 	payload := make(map[string]string)
 
-	encodedInsert, err := json.Marshal(payloadData["insert"])
+	insertEncoded, err := json.Marshal(payloadData["insert"])
 	if err != nil {
 		return err
 	}
-
-	payload["insert"] = string(encodedInsert)
+	payload["insert"] = string(insertEncoded)
 
 	if payloadData["remove"] != nil {
 		removeEncoded, err := json.Marshal(payloadData["remove"])
@@ -243,10 +256,14 @@ func BulkChannelMove(channels []slack.Channel, sectionID string) error {
 		payload["remove"] = string(removeEncoded)
 	}
 
-	body, code, err := RawSlackRequestFormData("POST", "users.channelSections.channels.bulkUpdate", payload, nil)
+	logrus.WithField("payload", payload).Debug("sending request")
+
+	body, code, err := RawSlackRequestFormData("POST", "users.channelSections.channels.bulkUpdate", payload)
 	if err != nil {
 		return err
 	}
+
+	logrus.WithField("response", string(body)).Debug("request sent")
 
 	if code != 200 {
 		return errors.New(string(body))
@@ -264,12 +281,6 @@ func reduceActionMap(action map[string][]string) (payload []moveChannelPayload) 
 
 func localGetChannelSection(sections []ChannelSection, c slack.Channel) (*ChannelSection, error) {
 	for _, s := range sections {
-		logrus.WithFields(logrus.Fields{
-			"section_name": s.Name,
-			"section_id": s.ID,
-			"section_channels": s.ChannelIdsPage.ChannelIDs,
-			"channel": c.Name,
-		}).Debug("checking section for channel")
 		if slices.Contains(s.ChannelIdsPage.ChannelIDs, c.ID) {
 			return &s, nil
 		}

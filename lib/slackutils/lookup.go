@@ -4,11 +4,45 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/graytonio/slack-cli/lib/config"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 )
+
+func ParseChannelTarget(arg string) (string, error) {
+	if strings.HasPrefix(arg, "@") {
+		logrus.WithField("target", arg).WithField("type", "user").Debug("looking up user")
+		user := strings.TrimPrefix(arg, "@")
+		uID, ok := config.GetConfig().SavedUsers[user]
+		if ok {
+			return uID, nil
+		}
+
+		u, err := GetUserByName(user)
+		if err != nil {
+			logrus.WithError(err).Debug("could not find user")
+			return "", err
+		}
+
+		logrus.WithField("id", u.ID).Debug("found user")
+		return u.ID, nil
+	} else if strings.HasPrefix(arg, "#") {
+		logrus.WithField("target", arg).WithField("type", "channel_name").Debug("looking up channel")
+		channel := strings.TrimPrefix(arg, "#")
+		c, err := GetChannelByName(channel)
+		if err != nil {
+			return "", err
+		}
+
+		logrus.WithField("id", c.ID).Debug("found channel")
+		return c.ID, nil
+	} else {
+		logrus.WithField("target", arg).WithField("type", "channel_id").Debug("sending to channel")
+		return arg, nil
+	}
+}
 
 // Get the Definition of a channel section by name
 func GetSectionByName(name string) (*ChannelSection, error) {
@@ -66,34 +100,6 @@ func GetChannelByName(name string) (channel *slack.Channel, err error) {
 	}
 
 	return nil, ErrChannelNotFound
-	
-	// var (
-	// 	list []slack.Channel
-	// 	cursor string
-	// )
-	// for {
-	// 	list, cursor, err = config.SlackClient.GetConversationsForUser(&slack.GetConversationsForUserParameters{
-	// 		Types: []string{"public_channel", "private_channel"},
-	// 		ExcludeArchived: true,
-	// 		Limit: 1000,
-	// 		Cursor: cursor,
-	// 	})
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-		
-	// 	for _, c := range list {
-	// 		if c.Name == name {
-	// 			return &c, nil
-	// 		}
-	// 	}
-
-	// 	if cursor == "" {
-	// 		break
-	// 	}
-	// }
-
-	// return nil, ErrChannelNotFound
 }
 
 // FIXME Too slow (cache search users)

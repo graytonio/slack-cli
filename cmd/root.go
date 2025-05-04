@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var jsonOutput bool
+
 var rootCmd = &cobra.Command{
 	Use:   "slack-cli",
 	Short: "Terminal based slack interface",
@@ -19,6 +21,7 @@ var rootCmd = &cobra.Command{
 		config.SetLogLevel()
 	})
 
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in json format")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable debug logging")
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
   }

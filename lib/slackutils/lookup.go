@@ -57,7 +57,7 @@ func GetSectionByName(name string) (*ChannelSection, error) {
 		}
 	}
 
-	return nil, ErrSectionNotFound	
+	return nil, ErrSectionNotFound
 }
 
 func GetSectionOfChannelName(channel string) (*ChannelSection, error) {
@@ -73,10 +73,10 @@ func GetSectionOfChannelName(channel string) (*ChannelSection, error) {
 
 	for _, s := range sections {
 		logrus.WithFields(logrus.Fields{
-			"section_name": s.Name,
-			"section_id": s.ID,
+			"section_name":     s.Name,
+			"section_id":       s.ID,
 			"section_channels": s.ChannelIdsPage.ChannelIDs,
-			"channel": channel,
+			"channel":          channel,
 		}).Debug("checking section for channel")
 		if slices.Contains(s.ChannelIdsPage.ChannelIDs, c.ID) {
 			return &s, nil
@@ -90,7 +90,7 @@ func GetSectionOfChannelName(channel string) (*ChannelSection, error) {
 func GetChannelByName(name string) (channel *slack.Channel, err error) {
 	channels, err := GetAllConversations()
 	if err != nil {
-	  return nil, err
+		return nil, err
 	}
 
 	for _, c := range channels {
@@ -126,20 +126,20 @@ type userBootResponseData struct {
 func GetAllConversations() (channels []slack.Channel, err error) {
 	body, _, err := RawSlackRequestJSON("POST", "client.userBoot", nil, nil)
 	if err != nil {
-	  return nil, err
-	}	
+		return nil, err
+	}
 
 	data := userBootResponseData{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
-	  return nil, err
+		return nil, err
 	}
 
 	return data.Channels, nil
 }
 
 var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrChannelNotFound = errors.New("channel not found")
+	ErrUserNotFound           = errors.New("user not found")
+	ErrChannelNotFound        = errors.New("channel not found")
 	ErrChannelSectionNotFound = errors.New("section for channel not found")
 )

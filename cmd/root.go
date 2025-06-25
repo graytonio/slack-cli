@@ -14,9 +14,9 @@ var jsonOutput bool
 var rootCmd = &cobra.Command{
 	Use:   "slack-cli",
 	Short: "Terminal based slack interface",
-  }
+}
 
-  func init() {
+func init() {
 	cobra.OnInitialize(func() {
 		config.SetLogLevel()
 	})
@@ -24,11 +24,11 @@ var rootCmd = &cobra.Command{
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in json format")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable debug logging")
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
-  }
-  
-  func Execute() {
+}
+
+func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-	  fmt.Fprintln(os.Stderr, err)
-	  os.Exit(1)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-  }
+}

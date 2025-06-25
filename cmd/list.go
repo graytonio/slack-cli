@@ -41,7 +41,7 @@ var listCmd = &cobra.Command{
 		total := channelListLimit
 		cursor := ""
 
-		for total > 0  {
+		for total > 0 {
 			resp, err := config.SlackClient.GetConversationHistory(&slack.GetConversationHistoryParameters{
 				ChannelID:          target,
 				Limit:              channelListChunkSize,
@@ -51,8 +51,8 @@ var listCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-      cursor = resp.ResponseMetadata.Cursor
- 
+			cursor = resp.ResponseMetadata.Cursor
+
 			for _, m := range resp.Messages {
 				fmt.Println(TSprintf(channelListOutputFormat, map[string]any{
 					"user_id":   m.User,
@@ -61,9 +61,9 @@ var listCmd = &cobra.Command{
 				}))
 			}
 
-      if cursor == "" {
-        break
-      }
+			if cursor == "" {
+				break
+			}
 
 			total = total - channelListChunkSize
 		}

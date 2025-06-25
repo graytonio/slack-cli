@@ -15,12 +15,12 @@ var (
 )
 
 type ChannelSection struct {
-	ID string `json:"channel_section_id"`
-	Name string `json:"name"`
-	Type string `json:"standard"`
-	Emoji string `json:"emoji"`
+	ID                   string `json:"channel_section_id"`
+	Name                 string `json:"name"`
+	Type                 string `json:"standard"`
+	Emoji                string `json:"emoji"`
 	NextChannelSectionID string `json:"next_channel_section_id"`
-	ChannelIdsPage struct {
+	ChannelIdsPage       struct {
 		ChannelIDs []string `json:"channel_ids"`
 	} `json:"channel_ids_page"`
 }
@@ -51,18 +51,18 @@ func GetChannelSections() ([]ChannelSection, error) {
 // Create a new channel section
 func CreateSection(name string, emoji string) (string, error) {
 	body, _, err := RawSlackRequestFormData("POST", "users.channelSections.create", map[string]string{
-		"name": name,
+		"name":  name,
 		"emoji": emoji,
 	})
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(body), nil
 }
 
 type GetSectionResponse struct {
-	OK bool `json:"ok"`
+	OK      bool           `json:"ok"`
 	Section ChannelSection `json:"channel_section"`
 }
 
@@ -85,8 +85,8 @@ func GetSectionChannels(sectionID string) ([]string, error) {
 }
 
 type moveChannelPayload struct {
-	ChannelSectionID string `json:"channel_section_id"`
-	ChannelIDs []string `json:"channel_ids"`
+	ChannelSectionID string   `json:"channel_section_id"`
+	ChannelIDs       []string `json:"channel_ids"`
 }
 
 // Move a channel from one section to another
@@ -109,7 +109,7 @@ func MoveChannelToSection(channelName string, toSectionName string) error {
 	insert := []moveChannelPayload{
 		{
 			ChannelSectionID: toSection.ID,
-			ChannelIDs: []string{channel.ID},
+			ChannelIDs:       []string{channel.ID},
 		},
 	}
 
@@ -127,7 +127,7 @@ func MoveChannelToSection(channelName string, toSectionName string) error {
 		remove := []moveChannelPayload{
 			{
 				ChannelSectionID: fromSection.ID,
-				ChannelIDs: []string{channel.ID},
+				ChannelIDs:       []string{channel.ID},
 			},
 		}
 
@@ -138,7 +138,7 @@ func MoveChannelToSection(channelName string, toSectionName string) error {
 
 		logrus.WithField("action", "remove").WithField("section", fromSection.Name).Debugf("%s", removeEncoded)
 		payload["remove"] = string(removeEncoded)
-	}	
+	}
 
 	body, code, err := RawSlackRequestFormData("POST", "users.channelSections.channels.bulkUpdate", payload)
 	if err != nil {
@@ -234,7 +234,6 @@ func BulkChannelMove(channels []slack.Channel, sectionID string) error {
 		"remove": reduceActionMap(actionData["remove"]),
 		"insert": reduceActionMap(actionData["insert"]),
 	}
-
 
 	if payloadData["insert"] == nil {
 		return nil

@@ -10,9 +10,9 @@ func init() {
 }
 
 var moveCmd = &cobra.Command{
-	Use: "move <channel> <section>",
+	Use:   "move <channel> <section>",
 	Short: "Move a channel to a new section",
-	Args: cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		channel := args[0]
 		section := args[1]

@@ -8,13 +8,13 @@ import (
 )
 
 type SlackCredentials struct {
-	Cookie string `mapstructure:"cookie"`
+	Cookie    string `mapstructure:"cookie"`
 	UserToken string `mapstructure:"token"`
 }
 
 var (
 	ErrSlackCookieNotFound = errors.New("could not find slack cookie")
-	ErrSlackTokenNotFound = errors.New("could not find slack user token")
+	ErrSlackTokenNotFound  = errors.New("could not find slack user token")
 )
 
 // TODO local cache

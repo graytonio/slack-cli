@@ -23,10 +23,10 @@ var home, _ = os.UserHomeDir()
 var darwinCookiePaths = []string{path.Join(home, "Library/Application Support/Slack/Cookies"), path.Join(home, "Library/Containers/com.tinyspeck.slackmacgap/Data/Library/Application Support/Slack/Cookies")}
 
 type BrowserCookieConfig struct {
-	CookiePath string
+	CookiePath  string
 	LevelDBPath string
-	Iterations int
-	Password string
+	Iterations  int
+	Password    string
 }
 
 var (
@@ -35,7 +35,7 @@ var (
 
 func GetDarwinConfig() (*BrowserCookieConfig, error) {
 	config := BrowserCookieConfig{
-		Iterations: 1003,
+		Iterations:  1003,
 		LevelDBPath: path.Join(home, "Library/Application Support/Slack/Local Storage/leveldb"),
 	}
 
@@ -66,7 +66,7 @@ func GetDarwinConfig() (*BrowserCookieConfig, error) {
 }
 
 var (
-	salt = []byte("saltysalt")
+	salt   = []byte("saltysalt")
 	keyLen = 16
 )
 
@@ -76,9 +76,9 @@ func generateHostKeys(hostname string) (keys []string) {
 	}
 
 	labels := strings.Split(hostname, ".")
-	for i := 2; i<len(labels) + 1; i++ {
+	for i := 2; i < len(labels)+1; i++ {
 		domain := strings.Join(labels[len(labels)-i:], ".")
-		keys = append(keys, domain, "." + domain)
+		keys = append(keys, domain, "."+domain)
 	}
 
 	return keys
@@ -105,9 +105,9 @@ type LocalData struct {
 }
 
 type TokenData struct {
-	ID string `json:"id"`
-	Name string `json:"name"`
-	Token string `json:"token"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Token  string `json:"token"`
 	Domain string `json:"domain"`
 }
 
@@ -139,10 +139,10 @@ func GetSlackUserTokens(path string) (*LocalData, error) {
 }
 
 type CookieData struct {
-	HostKey string
-	Path string
-	Name string
-	Value string
+	HostKey        string
+	Path           string
+	Name           string
+	Value          string
 	EncryptedValue string
 }
 
@@ -150,7 +150,7 @@ func getDBVersion(db *sql.DB) (int, error) {
 	sql := "select value from meta where key = 'version';"
 	rows, err := db.Query(sql)
 	if err != nil {
-	  return -1, err
+		return -1, err
 	}
 
 	db_version := 0
@@ -175,12 +175,12 @@ func GetSlackCookies(config *BrowserCookieConfig) ([]CookieData, error) {
 
 	db_version, err := getDBVersion(db)
 	if err != nil {
-	  return nil, err
+		return nil, err
 	}
 
 	data := []CookieData{}
 	sql := "select host_key, path, name, encrypted_value from cookies where host_key like ?"
-	
+
 	for _, host_key := range generateHostKeys("slack.com") {
 		logrus.WithField("host_key", host_key).Debug("querying for keys")
 		rows, err := db.Query(sql, host_key)
@@ -205,8 +205,8 @@ func GetSlackCookies(config *BrowserCookieConfig) ([]CookieData, error) {
 			logrus.WithField("cookie", value).Debug("successfully decrypted cookie")
 
 			// Cookies in database version 24 and later include a SHA256
-        	// hash of the domain to the start of the encrypted value.
-        	// https://github.com/chromium/chromium/blob/280265158d778772c48206ffaea788c1030b9aaa/net/extras/sqlite/sqlite_persistent_cookie_store.cc#L223-L224
+			// hash of the domain to the start of the encrypted value.
+			// https://github.com/chromium/chromium/blob/280265158d778772c48206ffaea788c1030b9aaa/net/extras/sqlite/sqlite_persistent_cookie_store.cc#L223-L224
 			if db_version >= 24 {
 				value = value[32:]
 			}

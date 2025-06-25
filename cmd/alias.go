@@ -12,9 +12,9 @@ func init() {
 }
 
 var aliasCmd = &cobra.Command{
-	Use: "alias <user|channel> name id",
+	Use:   "alias <user|channel> name id",
 	Short: "Save a channel or user to reference by name",
-	Args: cobra.ExactArgs(3),
+	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch args[0] {
 		case "user":

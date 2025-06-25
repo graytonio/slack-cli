@@ -19,23 +19,23 @@ import (
 var home, _ = os.UserHomeDir()
 
 type SmartSection struct {
-	SectionName string `mapstructure:"section"`
+	SectionName  string `mapstructure:"section"`
 	ReExpression string `mapstructure:"re"`
 }
 
 type Config struct {
-	Workspace string `mapstructure:"workspace"`
+	Workspace        string                            `mapstructure:"workspace"`
 	SlackCredentials *cookieextracter.SlackCredentials `mapstructure:"credentials"`
-	SavedChannels map[string]string `mapstructure:"channel_cache"`
-	SavedUsers map[string]string `mapstructure:"users_cache"`
-	SmartSections []SmartSection `mapstructure:"smart_sections"`
+	SavedChannels    map[string]string                 `mapstructure:"channel_cache"`
+	SavedUsers       map[string]string                 `mapstructure:"users_cache"`
+	SmartSections    []SmartSection                    `mapstructure:"smart_sections"`
 }
 
 var config = Config{
 	SlackCredentials: &cookieextracter.SlackCredentials{},
-	SavedChannels: make(map[string]string),
-	SavedUsers: make(map[string]string),
-	SmartSections: []SmartSection{},
+	SavedChannels:    make(map[string]string),
+	SavedUsers:       make(map[string]string),
+	SmartSections:    []SmartSection{},
 }
 
 var SlackClient *slack.Client
@@ -109,7 +109,7 @@ func initSlackClient() {
 	cookieURL, _ := url.Parse("https://slack.com")
 	jar.SetCookies(cookieURL, []*http.Cookie{
 		{
-			Name: "d",
+			Name:  "d",
 			Value: GetConfig().SlackCredentials.Cookie,
 		},
 	})

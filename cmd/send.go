@@ -14,9 +14,9 @@ func init() {
 }
 
 var sendCmd = &cobra.Command{
-	Use: "send <to> <message>",
+	Use:   "send <to> <message>",
 	Short: "Send a message to a channel",
-	Args: cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		message := args[1]
 
@@ -32,7 +32,7 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		
+
 		_, _, _, err = config.SlackClient.SendMessage(to, slack.MsgOptionText(message, false))
 		if err != nil {
 			return err

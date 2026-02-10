@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/slack-go/slack"
@@ -9,9 +11,15 @@ import (
 // channelItem implements list.Item for the channel list.
 type channelItem struct {
 	channel slack.Channel
+	favSlot int
 }
 
-func (i channelItem) Title() string       { return "#" + i.channel.Name }
+func (i channelItem) Title() string {
+	if i.favSlot > 0 {
+		return favBadgeStyle.Render(fmt.Sprintf("[%d]", i.favSlot)) + " #" + i.channel.Name
+	}
+	return "#" + i.channel.Name
+}
 func (i channelItem) Description() string { return i.channel.Topic.Value }
 func (i channelItem) FilterValue() string { return i.channel.Name }
 
@@ -56,7 +64,7 @@ func (m ChannelListModel) Update(msg tea.Msg) (ChannelListModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if msg.String() == "enter" {
+		if msg.String() == "enter" && m.list.FilterState() != list.Filtering {
 			if item, ok := m.list.SelectedItem().(channelItem); ok {
 				return m, func() tea.Msg {
 					return ChannelSelectedMsg{
@@ -65,6 +73,10 @@ func (m ChannelListModel) Update(msg tea.Msg) (ChannelListModel, tea.Cmd) {
 					}
 				}
 			}
+		}
+		if msg.String() == "esc" && m.list.FilterState() == list.FilterApplied {
+			m.list.ResetFilter()
+			return m, nil
 		}
 	}
 
@@ -88,4 +100,24 @@ func (m ChannelListModel) SelectedChannel() (slack.Channel, bool) {
 		return item.channel, true
 	}
 	return slack.Channel{}, false
+}
+
+// IsFiltering returns true when the channel list filter is actively accepting input.
+func (m ChannelListModel) IsFiltering() bool {
+	return m.list.FilterState() == list.Filtering
+}
+
+// UpdateFavSlots updates the favorite slot badges on all channel items.
+func (m *ChannelListModel) UpdateFavSlots(slots map[string]int) {
+	items := m.list.Items()
+	updated := make([]list.Item, len(items))
+	for i, item := range items {
+		if ci, ok := item.(channelItem); ok {
+			ci.favSlot = slots[ci.channel.ID]
+			updated[i] = ci
+		} else {
+			updated[i] = item
+		}
+	}
+	m.list.SetItems(updated)
 }

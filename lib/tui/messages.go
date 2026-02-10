@@ -58,6 +58,9 @@ type StatusMsg struct {
 	Text string
 }
 
+// FavoritesSavedMsg is sent after favorites have been persisted to config.
+type FavoritesSavedMsg struct{}
+
 // --- Commands ---
 
 func fetchChannels() tea.Cmd {

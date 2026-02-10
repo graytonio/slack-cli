@@ -29,6 +29,14 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("33"))
 
+	mentionStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("33"))
+
+	linkStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("33")).
+			Underline(true)
+
 	// Status bar
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("250")).
@@ -38,4 +46,38 @@ var (
 	// Input prompt
 	inputPromptStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("62"))
+
+	// Help bar
+	helpBarStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Padding(0, 1)
+
+	// Favorites overlay
+	favOverlayStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(1, 2).
+			Width(40)
+
+	favTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("62"))
+
+	favSelectedStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("62")).
+				Foreground(lipgloss.Color("230")).
+				Bold(true)
+
+	favItemStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+
+	favEmptyStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
+	favHelpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
+	favBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("62")).
+			Bold(true)
 )

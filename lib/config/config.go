@@ -23,12 +23,18 @@ type SmartSection struct {
 	ReExpression string `mapstructure:"re"`
 }
 
+type FavoriteChannel struct {
+	ID   string `mapstructure:"id"`
+	Name string `mapstructure:"name"`
+}
+
 type Config struct {
-	Workspace        string                            `mapstructure:"workspace"`
-	SlackCredentials *cookieextracter.SlackCredentials `mapstructure:"credentials"`
-	SavedChannels    map[string]string                 `mapstructure:"channel_cache"`
-	SavedUsers       map[string]string                 `mapstructure:"users_cache"`
-	SmartSections    []SmartSection                    `mapstructure:"smart_sections"`
+	Workspace         string                            `mapstructure:"workspace"`
+	SlackCredentials  *cookieextracter.SlackCredentials `mapstructure:"credentials"`
+	SavedChannels     map[string]string                 `mapstructure:"channel_cache"`
+	SavedUsers        map[string]string                 `mapstructure:"users_cache"`
+	SmartSections     []SmartSection                    `mapstructure:"smart_sections"`
+	FavoriteChannels  []FavoriteChannel                 `mapstructure:"favorite_channels"`
 }
 
 var config = Config{
@@ -36,6 +42,7 @@ var config = Config{
 	SavedChannels:    make(map[string]string),
 	SavedUsers:       make(map[string]string),
 	SmartSections:    []SmartSection{},
+	FavoriteChannels: []FavoriteChannel{},
 }
 
 var SlackClient *slack.Client
@@ -119,6 +126,12 @@ func initSlackClient() {
 	}
 
 	SlackClient = slack.New(GetConfig().SlackCredentials.UserToken, slack.OptionHTTPClient(SlackHTTPClient))
+}
+
+func SaveFavorites(favs []FavoriteChannel) {
+	config.FavoriteChannels = favs
+	viper.Set("favorite_channels", favs)
+	viper.WriteConfig()
 }
 
 func GetConfig() *Config {

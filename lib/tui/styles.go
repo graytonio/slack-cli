@@ -80,4 +80,33 @@ var (
 	favBadgeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("62")).
 			Bold(true)
+
+	// Custom emoji fallback
+	customEmojiStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("220")).
+				Bold(true)
+
+	// Thread indicator (gray, shown after messages with replies)
+	threadIndicatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240"))
+
+	// Left-side marker for the selected message
+	cursorMarker = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("62")).
+			Bold(true)
+
+	// Selected message: brighter timestamp and username
+	cursorTimestampStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("255")).
+				Bold(true)
+
+	cursorUsernameStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("75")).
+				Bold(true)
+
+	// Thread panel header
+	threadHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("62")).
+				Padding(0, 1)
 )

@@ -23,14 +23,18 @@ type ChatViewModel struct {
 	channelID   string
 	channelName string
 	userCache   *UserCache
+	emojiCache  *EmojiCache
+	cursor      int
+	lineOffsets []int // starting line number of each message in rendered content
 	width       int
 	height      int
 	ready       bool
 }
 
-func NewChatViewModel(userCache *UserCache) ChatViewModel {
+func NewChatViewModel(userCache *UserCache, emojiCache *EmojiCache) ChatViewModel {
 	return ChatViewModel{
-		userCache: userCache,
+		userCache:  userCache,
+		emojiCache: emojiCache,
 	}
 }
 
@@ -43,6 +47,37 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+				content := m.renderMessages()
+				m.viewport.SetContent(content)
+				m.syncViewportToCursor()
+			}
+			return m, nil
+		case "down", "j":
+			if m.cursor < len(m.messages)-1 {
+				m.cursor++
+				content := m.renderMessages()
+				m.viewport.SetContent(content)
+				m.syncViewportToCursor()
+			}
+			return m, nil
+		case "enter":
+			if sel := m.SelectedMessage(); sel != nil && sel.ReplyCount > 0 {
+				threadTS := sel.Timestamp
+				if sel.ThreadTimestamp != "" {
+					threadTS = sel.ThreadTimestamp
+				}
+				return m, func() tea.Msg {
+					return ThreadOpenMsg{ChannelID: m.channelID, ThreadTS: threadTS}
+				}
+			}
+			return m, nil
+		}
+
 	case MessagesLoadedMsg:
 		if msg.Err != nil {
 			return m, nil
@@ -50,6 +85,10 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 		m.channelID = msg.ChannelID
 		// Messages come in reverse chronological order; reverse them
 		m.messages = reverseMessages(msg.Messages)
+		m.cursor = len(m.messages) - 1
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
 		content := m.renderMessages()
 		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
@@ -81,6 +120,43 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+// SelectedMessage returns the message at the cursor position.
+func (m *ChatViewModel) SelectedMessage() *slack.Message {
+	if len(m.messages) == 0 || m.cursor < 0 || m.cursor >= len(m.messages) {
+		return nil
+	}
+	return &m.messages[m.cursor]
+}
+
+// syncViewportToCursor adjusts viewport scroll so the cursor stays visible.
+// Must be called after renderMessages() so that lineOffsets is up to date.
+func (m *ChatViewModel) syncViewportToCursor() {
+	if len(m.messages) == 0 || len(m.lineOffsets) == 0 {
+		return
+	}
+	idx := m.cursor
+	if idx >= len(m.lineOffsets) {
+		idx = len(m.lineOffsets) - 1
+	}
+
+	cursorLine := m.lineOffsets[idx]
+
+	// Determine how many lines this message occupies
+	cursorEnd := cursorLine + 1
+	if idx+1 < len(m.lineOffsets) {
+		cursorEnd = m.lineOffsets[idx+1]
+	}
+
+	// If cursor message is above the viewport, scroll up to it
+	if cursorLine < m.viewport.YOffset {
+		m.viewport.SetYOffset(cursorLine)
+	}
+	// If cursor message extends below the viewport, scroll down
+	if cursorEnd > m.viewport.YOffset+m.viewport.Height {
+		m.viewport.SetYOffset(cursorEnd - m.viewport.Height)
+	}
 }
 
 func (m ChatViewModel) View() string {
@@ -120,15 +196,21 @@ func (m ChatViewModel) LatestTimestamp() string {
 	return m.messages[len(m.messages)-1].Timestamp
 }
 
-func (m ChatViewModel) renderMessages() string {
+func (m *ChatViewModel) renderMessages() string {
 	if len(m.messages) == 0 {
+		m.lineOffsets = nil
 		return "No messages"
 	}
 
-	wrapStyle := lipgloss.NewStyle().Width(m.width)
+	wrapWidth := m.width - 1 // reserve 1 column for cursor marker/spacer
+	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
+	m.lineOffsets = make([]int, len(m.messages))
+	currentLine := 0
 
 	var sb strings.Builder
-	for _, msg := range m.messages {
+	for i, msg := range m.messages {
+		m.lineOffsets[i] = currentLine
+
 		username := msg.User
 		if name, ok := m.userCache.Get(msg.User); ok {
 			username = name
@@ -136,14 +218,39 @@ func (m ChatViewModel) renderMessages() string {
 
 		text := m.replaceLinks(msg.Text)
 		text = m.replaceMentions(text)
+		text = m.emojiCache.Replace(text)
 
 		ts := formatTimestamp(msg.Timestamp)
-		line := fmt.Sprintf("%s %s: %s",
-			timestampStyle.Render("["+ts+"]"),
-			usernameStyle.Render(username),
+		tsStyle := timestampStyle
+		unStyle := usernameStyle
+		if i == m.cursor {
+			tsStyle = cursorTimestampStyle
+			unStyle = cursorUsernameStyle
+		}
+
+		threadIcon := " "
+		if msg.ReplyCount > 0 {
+			threadIcon = threadIndicatorStyle.Render("💬") + " "
+		}
+
+		line := fmt.Sprintf("%s %s%s: %s",
+			tsStyle.Render("["+ts+"]"),
+			threadIcon,
+			unStyle.Render(username),
 			text,
 		)
-		sb.WriteString(wrapStyle.Render(line) + "\n")
+
+		rendered := wrapStyle.Render(line)
+
+		// Prepend cursor marker or spacer for alignment
+		if i == m.cursor {
+			rendered = cursorMarker.Render("▎") + rendered
+		} else {
+			rendered = " " + rendered
+		}
+
+		sb.WriteString(rendered + "\n")
+		currentLine += strings.Count(rendered, "\n") + 1
 	}
 	return sb.String()
 }

@@ -15,17 +15,21 @@ const (
 	focusChannels focusPanel = iota
 	focusMessages
 	focusInput
+	focusThread
+	focusThreadInput
 )
 
 const channelListWidth = 30
 
 // AppModel is the root Bubble Tea model for the TUI.
 type AppModel struct {
-	channels  ChannelListModel
-	chatView  ChatViewModel
-	input     InputModel
-	favorites FavoritesModel
-	userCache *UserCache
+	channels   ChannelListModel
+	chatView   ChatViewModel
+	input      InputModel
+	threadView ThreadViewModel
+	favorites  FavoritesModel
+	userCache  *UserCache
+	emojiCache *EmojiCache
 
 	focus       focusPanel
 	statusText  string
@@ -38,19 +42,22 @@ type AppModel struct {
 
 func NewAppModel() AppModel {
 	uc := NewUserCache()
+	ec := NewEmojiCache()
 	return AppModel{
 		channels:   NewChannelListModel(),
-		chatView:   NewChatViewModel(uc),
+		chatView:   NewChatViewModel(uc, ec),
 		input:      NewInputModel(),
+		threadView: NewThreadViewModel(uc, ec),
 		favorites:  NewFavoritesModel(),
 		userCache:  uc,
+		emojiCache: ec,
 		focus:      focusChannels,
 		statusText: "Loading channels...",
 	}
 }
 
 func (m AppModel) Init() tea.Cmd {
-	return tea.Batch(fetchChannels(), tickCmd())
+	return tea.Batch(fetchChannels(), fetchEmoji(), tickCmd())
 }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -130,6 +137,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFocus(focusChannels)
 			return m, nil
 		case "esc":
+			if m.focus == focusThread || m.focus == focusThreadInput {
+				m.threadView.Close()
+				m.setFocus(focusMessages)
+				m.updateSizes()
+				return m, nil
+			}
 			if m.focus == focusInput {
 				m.setFocus(focusMessages)
 				return m, nil
@@ -160,6 +173,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		m.syncFavBadges()
 		return m, tea.Batch(cmds...)
+
+	case EmojiLoadedMsg:
+		if msg.Err == nil {
+			m.emojiCache.SetCustom(msg.Emojis)
+			// Re-render chat with emoji resolved
+			if len(m.chatView.messages) > 0 {
+				content := m.chatView.renderMessages()
+				m.chatView.viewport.SetContent(content)
+			}
+		}
+		return m, nil
 
 	case FavoritesSavedMsg:
 		m.syncFavBadges()
@@ -194,6 +218,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UserResolvedMsg:
 		var cmd tea.Cmd
 		m.chatView, cmd = m.chatView.Update(msg)
+		if m.threadView.visible {
+			var tcmd tea.Cmd
+			m.threadView, tcmd = m.threadView.Update(msg)
+			return m, tea.Batch(cmd, tcmd)
+		}
 		return m, cmd
 
 	case MessageSentMsg:
@@ -204,11 +233,42 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusText = fmt.Sprintf("Connected to #%s", m.channelName)
 		return m, fetchMessages(m.channelID)
 
+	case ThreadOpenMsg:
+		m.threadView.Open(msg.ChannelID, msg.ThreadTS, m.channelName)
+		m.setFocus(focusThread)
+		m.updateSizes()
+		return m, fetchThreadReplies(msg.ChannelID, msg.ThreadTS)
+
+	case ThreadRepliesLoadedMsg:
+		if msg.Err != nil {
+			m.statusText = fmt.Sprintf("Error loading thread: %v", msg.Err)
+		}
+		var cmd tea.Cmd
+		m.threadView, cmd = m.threadView.Update(msg)
+		return m, cmd
+
+	case NewThreadRepliesMsg:
+		var cmd tea.Cmd
+		m.threadView, cmd = m.threadView.Update(msg)
+		return m, cmd
+
+	case ThreadReplySentMsg:
+		if msg.Err != nil {
+			m.statusText = fmt.Sprintf("Reply error: %v", msg.Err)
+			return m, nil
+		}
+		m.statusText = fmt.Sprintf("Connected to #%s", m.channelName)
+		return m, fetchThreadReplies(msg.ChannelID, msg.ThreadTS)
+
 	case TickMsg:
 		cmds = append(cmds, tickCmd())
 		if m.channelID != "" {
 			latestTS := m.chatView.LatestTimestamp()
 			cmds = append(cmds, pollMessages(m.channelID, latestTS))
+		}
+		if m.threadView.visible {
+			latestTS := m.threadView.LatestTimestamp()
+			cmds = append(cmds, pollThreadReplies(m.threadView.channelID, m.threadView.threadTS, latestTS))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -231,6 +291,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		cmds = append(cmds, cmd)
+	case focusThread, focusThreadInput:
+		var cmd tea.Cmd
+		m.threadView, cmd = m.threadView.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -241,14 +305,41 @@ func (m AppModel) View() string {
 		return "Loading..."
 	}
 
-	// Channel list panel (left)
+	// Calculate right-side dimensions first so channel panel can match
+	rightWidth := m.width - channelListWidth - 4 // account for borders
+	if rightWidth < 10 {
+		rightWidth = 10
+	}
+
+	// Split right side between chat and thread if thread is visible
+	chatWidth := rightWidth
+	threadWidth := 0
+	if m.threadView.visible {
+		threadWidth = rightWidth * 40 / 100
+		chatWidth = rightWidth - threadWidth - 2 // -2 for thread border
+		if chatWidth < 10 {
+			chatWidth = 10
+		}
+		if threadWidth < 10 {
+			threadWidth = 10
+		}
+	}
+
+	inputHeight := 3
+	chatHeight := m.height - inputHeight - 3 - 3 // -3 for input border, -1 top padding, -1 status, -1 help bar
+	if chatHeight < 3 {
+		chatHeight = 3
+	}
+
+	// Channel list panel (left) — height matches chat + input + their borders
 	channelBorder := unfocusedBorder
 	if m.focus == focusChannels {
 		channelBorder = focusedBorder
 	}
+	channelPanelHeight := chatHeight + inputHeight + 2 // +2 for input border top/bottom
 	channelPanel := channelBorder.
 		Width(channelListWidth).
-		Height(m.height - 4). // -1 status bar, -1 help bar, -2 borders
+		Height(channelPanelHeight).
 		Render(m.channels.View())
 
 	// Chat viewport (right top)
@@ -256,19 +347,9 @@ func (m AppModel) View() string {
 	if m.focus == focusMessages {
 		chatBorder = focusedBorder
 	}
-	rightWidth := m.width - channelListWidth - 4 // account for borders
-	if rightWidth < 10 {
-		rightWidth = 10
-	}
-
-	inputHeight := 3
-	chatHeight := m.height - inputHeight - 3 - 2 // -3 for input border, -1 status, -1 help bar
-	if chatHeight < 3 {
-		chatHeight = 3
-	}
 
 	chatPanel := chatBorder.
-		Width(rightWidth).
+		Width(chatWidth).
 		Height(chatHeight).
 		Render(m.chatView.View())
 
@@ -278,15 +359,30 @@ func (m AppModel) View() string {
 		inputBorder = focusedBorder
 	}
 	inputPanel := inputBorder.
-		Width(rightWidth).
+		Width(chatWidth).
 		Height(inputHeight).
 		Render(m.input.View())
 
-	// Compose right side
-	rightSide := lipgloss.JoinVertical(lipgloss.Left, chatPanel, inputPanel)
+	// Compose chat side
+	chatSide := lipgloss.JoinVertical(lipgloss.Left, chatPanel, inputPanel)
 
-	// Compose main layout
-	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, channelPanel, rightSide)
+	var mainLayout string
+	if m.threadView.visible {
+		// Thread panel
+		threadBorder := unfocusedBorder
+		if m.focus == focusThread || m.focus == focusThreadInput {
+			threadBorder = focusedBorder
+		}
+		threadPanel := threadBorder.
+			Width(threadWidth).
+			Height(channelPanelHeight). // match channel panel height
+			Render(m.threadView.View())
+
+		rightSide := lipgloss.JoinHorizontal(lipgloss.Top, chatSide, threadPanel)
+		mainLayout = lipgloss.JoinHorizontal(lipgloss.Top, channelPanel, rightSide)
+	} else {
+		mainLayout = lipgloss.JoinHorizontal(lipgloss.Top, channelPanel, chatSide)
+	}
 
 	// Status bar
 	statusBar := statusBarStyle.
@@ -294,11 +390,17 @@ func (m AppModel) View() string {
 		Render(m.statusText)
 
 	// Help bar
+	helpText := "Ctrl+K Filter  Ctrl+L Channels  Ctrl+N New Message  Ctrl+F Favorites  Ctrl+A Add Fav  Alt+N Jump  Tab Next Panel"
+	if m.threadView.visible {
+		helpText += "  Esc Close Thread"
+	} else if m.focus == focusMessages {
+		helpText += "  Enter Open Thread"
+	}
 	helpBar := helpBarStyle.
 		Width(m.width).
-		Render("Ctrl+K Filter  Ctrl+L Channels  Ctrl+N New Message  Ctrl+F Favorites  Ctrl+A Add Fav  Alt+N Jump  Tab Next Panel")
+		Render(helpText)
 
-	base := mainLayout + "\n" + statusBar + "\n" + helpBar
+	base := "\n" + mainLayout + "\n" + statusBar + "\n" + helpBar
 
 	// Overlay favorites panel if visible
 	if m.favorites.visible {
@@ -310,11 +412,25 @@ func (m AppModel) View() string {
 }
 
 func (m *AppModel) cycleFocus(forward bool) {
-	if forward {
-		m.focus = (m.focus + 1) % 3
-	} else {
-		m.focus = (m.focus + 2) % 3
+	panels := []focusPanel{focusChannels, focusMessages, focusInput}
+	if m.threadView.visible {
+		panels = append(panels, focusThread, focusThreadInput)
 	}
+	n := len(panels)
+	// Find current index
+	cur := 0
+	for i, p := range panels {
+		if p == m.focus {
+			cur = i
+			break
+		}
+	}
+	if forward {
+		cur = (cur + 1) % n
+	} else {
+		cur = (cur + n - 1) % n
+	}
+	m.focus = panels[cur]
 	m.applyFocus()
 }
 
@@ -325,8 +441,14 @@ func (m *AppModel) setFocus(f focusPanel) {
 
 func (m *AppModel) applyFocus() {
 	m.input.Blur()
-	if m.focus == focusInput {
+	m.threadView.BlurAll()
+	switch m.focus {
+	case focusInput:
 		m.input.Focus()
+	case focusThread:
+		m.threadView.FocusViewport()
+	case focusThreadInput:
+		m.threadView.FocusInput()
 	}
 }
 
@@ -336,6 +458,10 @@ func (m *AppModel) switchToChannel(channelID, channelName string) tea.Cmd {
 	m.chatView.SetChannel(channelName)
 	m.input.SetChannel(channelID)
 	m.statusText = fmt.Sprintf("Loading #%s...", channelName)
+	if m.threadView.visible {
+		m.threadView.Close()
+		m.updateSizes()
+	}
 	m.setFocus(focusMessages)
 	return fetchMessages(channelID)
 }
@@ -356,20 +482,38 @@ func (m *AppModel) updateSizes() {
 		rightWidth = 10
 	}
 
+	chatWidth := rightWidth
+	threadWidth := 0
+	if m.threadView.visible {
+		threadWidth = rightWidth * 40 / 100
+		chatWidth = rightWidth - threadWidth - 2
+		if chatWidth < 10 {
+			chatWidth = 10
+		}
+		if threadWidth < 10 {
+			threadWidth = 10
+		}
+	}
+
 	inputHeight := 1
-	chatHeight := m.height - inputHeight - 9 // borders, status, help bar, padding
+	chatHeight := m.height - inputHeight - 10 // borders, status, help bar, top padding
 	if chatHeight < 3 {
 		chatHeight = 3
 	}
 
-	channelHeight := m.height - 6
+	// Channel height derived from chat + input so they stay aligned
+	channelHeight := chatHeight + inputHeight + 2 // +2 for input border
 	if channelHeight < 3 {
 		channelHeight = 3
 	}
 
 	m.channels.SetSize(channelListWidth-2, channelHeight)
-	m.chatView.SetSize(rightWidth, chatHeight)
-	m.input.SetWidth(rightWidth)
+	m.chatView.SetSize(chatWidth, chatHeight)
+	m.input.SetWidth(chatWidth)
+
+	if m.threadView.visible {
+		m.threadView.SetSize(threadWidth, channelHeight)
+	}
 }
 
 // placeOverlay renders the overlay string centered on top of the base string.

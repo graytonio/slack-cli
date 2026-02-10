@@ -58,8 +58,43 @@ type StatusMsg struct {
 	Text string
 }
 
+// EmojiLoadedMsg is sent when custom workspace emoji have been fetched.
+type EmojiLoadedMsg struct {
+	Emojis map[string]string
+	Err    error
+}
+
 // FavoritesSavedMsg is sent after favorites have been persisted to config.
 type FavoritesSavedMsg struct{}
+
+// ThreadOpenMsg is sent when the user presses Enter on a threaded message.
+type ThreadOpenMsg struct {
+	ChannelID string
+	ThreadTS  string
+}
+
+// ThreadRepliesLoadedMsg is sent when thread replies have been fetched.
+type ThreadRepliesLoadedMsg struct {
+	Messages  []slack.Message
+	ChannelID string
+	ThreadTS  string
+	Err       error
+}
+
+// NewThreadRepliesMsg is sent when polling finds new thread replies.
+type NewThreadRepliesMsg struct {
+	Messages  []slack.Message
+	ChannelID string
+	ThreadTS  string
+	Err       error
+}
+
+// ThreadReplySentMsg is sent after a thread reply has been sent.
+type ThreadReplySentMsg struct {
+	ChannelID string
+	ThreadTS  string
+	Err       error
+}
 
 // --- Commands ---
 
@@ -126,8 +161,58 @@ func sendMessage(channelID, text string) tea.Cmd {
 	}
 }
 
+func fetchEmoji() tea.Cmd {
+	return func() tea.Msg {
+		emojis, err := config.SlackClient.GetEmoji()
+		return EmojiLoadedMsg{Emojis: emojis, Err: err}
+	}
+}
+
 func tickCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return TickMsg{}
 	})
+}
+
+func fetchThreadReplies(channelID, threadTS string) tea.Cmd {
+	return func() tea.Msg {
+		msgs, _, _, err := config.SlackClient.GetConversationReplies(&slack.GetConversationRepliesParameters{
+			ChannelID: channelID,
+			Timestamp: threadTS,
+			Inclusive: true,
+			Limit:     200,
+		})
+		if err != nil {
+			return ThreadRepliesLoadedMsg{ChannelID: channelID, ThreadTS: threadTS, Err: err}
+		}
+		return ThreadRepliesLoadedMsg{Messages: msgs, ChannelID: channelID, ThreadTS: threadTS}
+	}
+}
+
+func pollThreadReplies(channelID, threadTS, latestTS string) tea.Cmd {
+	return func() tea.Msg {
+		if channelID == "" || threadTS == "" {
+			return NewThreadRepliesMsg{}
+		}
+		msgs, _, _, err := config.SlackClient.GetConversationReplies(&slack.GetConversationRepliesParameters{
+			ChannelID: channelID,
+			Timestamp: threadTS,
+			Oldest:    latestTS,
+			Limit:     100,
+		})
+		if err != nil {
+			return NewThreadRepliesMsg{ChannelID: channelID, ThreadTS: threadTS, Err: err}
+		}
+		return NewThreadRepliesMsg{Messages: msgs, ChannelID: channelID, ThreadTS: threadTS}
+	}
+}
+
+func sendThreadReply(channelID, threadTS, text string) tea.Cmd {
+	return func() tea.Msg {
+		_, _, _, err := config.SlackClient.SendMessage(channelID,
+			slack.MsgOptionText(text, false),
+			slack.MsgOptionTS(threadTS),
+		)
+		return ThreadReplySentMsg{ChannelID: channelID, ThreadTS: threadTS, Err: err}
+	}
 }

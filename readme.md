@@ -32,6 +32,16 @@ _NOTE_ Before running the cli again make sure to fully quit the slack desktop ap
 
 ## Usage
 
+### Interactive TUI
+
+Open a full terminal interface for browsing channels, reading messages, and participating in threads:
+
+```bash
+slack-cli tui
+```
+
+See the [TUI Guide](docs/tui.md) for detailed documentation on keybindings, panels, and features.
+
 ### Send Message
 
 Sending a message to a user or to a channel by using the id of the conversation or a saved alias.
